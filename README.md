@@ -1,71 +1,69 @@
-# discord-username-hunter
+# discord-3char-hunter
 
-Automatically hunts for available 3–4 character Discord usernames using GitHub Actions.
-
-## How it works
-
-Every 6 hours (or on manual trigger), the workflow:
-1. Generates random 3–4 char candidates from `[a-z0-9]`
-2. Tries to claim each via `PATCH /api/v10/users/@me`
-3. Discord returns `200` → username is now yours → a GitHub Issue is opened to notify you
-4. Discord returns `400` (taken) → logs it, moves to next candidate
-5. All attempted names are saved to `tried.txt` and committed back, so runs never repeat
+يصطاد يوزرنيم **3 أحرف** على Discord بشكل تلقائي عبر GitHub Actions.
 
 ---
 
-## Setup (5 minutes)
+## كيف يشتغل
 
-### 1. Fork / create this repo on GitHub
+- **أول رن:** يولّد كل الكومبينيشنز الممكنة (46,656 اسم من a-z + 0-9) ويحفظهم في `queue.txt` بترتيب عشوائي
+- **كل ساعة:** يجرب اسمين من أول القائمة عبر `PATCH /api/v10/users/@me`
+  - ✅ `200` → اليوزرنيم صار لك، يفتح GitHub Issue ويوقف الـ workflow تلقائياً
+  - ✗ `400` (محجوز) → يحذفه من القائمة ويمشي
+  - ⏳ `429` (rate limit) → يوقف الرن الحالي ويحاول الساعة الجاية
+- **القائمة** (`queue.txt`) تتقلص كل رن — تقدر تشوف التقدم
 
-### 2. Add your Discord token as a secret
+---
 
-Go to **Settings → Secrets and variables → Actions → New repository secret**
+## الإعداد
+
+### 1. ارفع الملفات على GitHub repo جديد
+
+```
+your-repo/
+  .github/workflows/username_hunter.yml
+  hunt.py
+  README.md
+```
+
+### 2. أضف الـ Token كـ Secret
+
+**Settings → Secrets and variables → Actions → New repository secret**
 
 | Name | Value |
 |------|-------|
-| `DISCORD_TOKEN` | your Discord user token |
+| `DISCORD_TOKEN` | توكن حسابك على Discord |
 
-**How to get your Discord token:**
-1. Open Discord in a browser (discord.com/app)
-2. Open DevTools → Network tab
-3. Click any channel or action
-4. Find any request to `discord.com/api` → look at the `Authorization` header
-5. That value is your token — keep it private!
+**كيف تجيب التوكن:**
+1. افتح Discord في المتصفح (discord.com/app)
+2. DevTools → Network
+3. اضغط على أي شي → دور على أي request لـ `discord.com/api`
+4. Authorization header → القيمة هي توكنك
 
-> ⚠️ Never commit your token to the repo. Use the GitHub Secret only.
+> ⚠️ لا تحط التوكن في الكود أبداً — GitHub Secret فقط
 
-### 3. Enable Actions
+### 3. فعّل Actions وشغّل يدوياً أول مرة
 
-Go to the **Actions** tab in your repo and enable workflows if prompted.
-
-### 4. Run manually first
-
-Actions → **Discord Username Hunter** → **Run workflow** — watch the logs.
+Actions → **Discord 3-Char Username Hunter** → **Run workflow**
 
 ---
 
-## Configuration (hunt.py)
+## الأرقام
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CHARS` | `a-z0-9` | Characters used to build names |
-| `LENGTHS` | `[4,4,4,3]` | Pick pool — skewed toward 4-char |
-| `MAX_TRIES` | `2` | Attempts per run (respect rate limits) |
-
-Change `LENGTHS = [3, 3, 3, 4]` to hunt more 3-char names (rarer, mostly taken).
-
----
-
-## Rate limits
-
-Discord allows roughly **2 username changes per hour** per account. The workflow is capped at 2 attempts per run and runs every 6 hours — well within that limit.
+| | |
+|--|--|
+| إجمالي الأسماء | 46,656 |
+| محاولات باليوم | 48 (2 × 24 ساعة) |
+| لو 0.5% متاح | ~4 أيام متوسط |
+| أقصى وقت (كلهم محجوزين) | ~972 يوم |
 
 ---
 
-## Files
+## الملفات
 
-```
-.github/workflows/username_hunter.yml   — the Actions workflow
-hunt.py                                 — the hunter script
-tried.txt                               — names already attempted (auto-updated)
-```
+| ملف | وظيفة |
+|-----|-------|
+| `hunt.py` | السكريبت الرئيسي |
+| `queue.txt` | قائمة الأسماء المتبقية (تتولّد تلقائياً) |
+| `claimed.txt` | اسم الحساب بعد النجاح (يوقف الـ workflow) |
+| `.github/workflows/username_hunter.yml` | الـ workflow |
