@@ -1,1 +1,82 @@
+name: Discord 3-Char Username Hunter
 
+on:
+  schedule:
+    - cron: "0 * * * *"    # every hour — stays within Discord's 2 changes/hour limit
+  workflow_dispatch:         # manual trigger from Actions tab
+
+permissions:
+  contents: write            # commit queue.txt back to repo
+  issues: write              # open success issue
+
+jobs:
+  hunt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      # ── checkout ────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── python ──────────────────────────────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests --quiet
+
+      # ── run hunter ──────────────────────────────────────────────────────
+      - name: Run hunter
+        id: hunter
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+        run: python hunt.py
+
+      # ── commit queue progress ────────────────────────────────────────────
+      - name: Save queue progress
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add queue.txt claimed.txt 2>/dev/null || true
+          git diff --staged --quiet || git commit -m "chore: queue progress [skip ci]"
+          git push
+
+      # ── success notification ─────────────────────────────────────────────
+      - name: Open issue on success
+        if: steps.hunter.outputs.claimed != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const name = "${{ steps.hunter.outputs.claimed }}";
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              title: `🎉 Discord username claimed: ${name}`,
+              body: [
+                `The 3-char username **\`${name}\`** is now yours on Discord!`,
+                ``,
+                `**Time:** ${new Date().toUTCString()}`,
+                ``,
+                `**Next:** Open Discord → confirm \`${name}\` is your active username.`,
+                `Then go to **Settings → Actions** and disable the \`username_hunter\` workflow.`,
+              ].join("\n"),
+              labels: ["success"],
+            });
+
+      # ── auto-disable once claimed ─────────────────────────────────────────
+      - name: Disable workflow after success
+        if: steps.hunter.outputs.claimed != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.disableWorkflow({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              workflow_id: "username_hunter.yml",
+            });
+            console.log("Workflow disabled — no more hunting needed!");
